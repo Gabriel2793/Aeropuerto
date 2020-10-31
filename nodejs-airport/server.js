@@ -21,12 +21,12 @@ app.use(cors({
 
 app.use( express.json({limit: '10000mb', extended: true}) );
 
-router.post( '/createFlight', middleware.verifyAthorization, upload.single('image'), routes.flights.createFlight);
+router.post( '/createFlight', upload.single('image'), routes.flights.createFlight);
 router.get('/getSeats/:vueloId/:fecha', middleware.verifyAthorization, routes.flights.getSeats);
 router.get('/getBoughtSeats/:user_id/:flight_id/:horario', middleware.verifyAthorization, routes.flights.getBoughtSeats);
 router.post('/getUsersFlights', middleware.verifyAthorization,routes.flights.getUsersFlights);
 router.post( '/getFlights', middleware.verifyAthorization,routes.flights.getFlights);
-router.post( '/buyPlaces', middleware.verifyAthorization, routes.flights.buyPlaces);
+router.post( '/buyPlaces', routes.flights.buyPlaces);
 router.post( '/signUp', routes.flights.signUp);
 router.post( '/signIn', routes.flights.signIn);
 

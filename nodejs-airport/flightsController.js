@@ -130,10 +130,11 @@ function getBoughtSeats( req, res ) {
 
     knex( 'dateflights' )
     .join('flights_places','dateflights.id','flights_places.dateflight_id')
+    .join('flights_places_users', 'flights_places.id', 'flights_places_users.flights_places_id')
     .select(knex.raw('Group_Concat(place_id ORDER BY place_id) as places'))
     .where('dateflights.flight_id',data.flight_id)
     .where('dateflights.dateofflight',data.horario)
-    .where('flights_places.user_id',data.user_id)
+    .where('flights_places_users.user_id',data.user_id)
     .groupBy('dateflights.id')
     .orderBy('flights_places.place_id') 
     .then( response => {
@@ -211,20 +212,20 @@ function buyPlaces( req, res ) {
 
     if( requiredFieldsExist ) {
         let mywhere = '';
-        let myselect = 'select count(*) as cuantos from ';
+        let myselect = '';
         let i;
         let valores = [];
         let tablas ='{';
 
         for(i=0; i < data.places.length; i++){
             if((i == 0 && i == data.places.length-1) || i == data.places.length-1){
-                myselect += 'flights_places as F'+i;
+                myselect += 'F'+i+'.id as d'+i;
                 mywhere += '(F'+i+'.dateflight_id = ? and F'+i+'.place_id = ? and F'+i+'.ocupado = 0)';
                 valores.push(data.dateflight_id)
                 valores.push(data.places[i])
                 tablas += '"F'+i+'":"flights_places"';
             }else{
-                myselect += 'flights_places as F'+i+', ';
+                myselect += 'F'+i+'.id as d'+i+', ';
                 mywhere += '(F'+i+'.dateflight_id = ? and F'+i+'.place_id = ? and F'+i+'.ocupado = 0) and ';
                 valores.push(data.dateflight_id)
                 valores.push(data.places[i])
@@ -236,21 +237,32 @@ function buyPlaces( req, res ) {
 
         knex.transaction(async trx => {
             cuantos = await knex(JSON.parse(tablas))
+            .column(myselect.split(','))
+            .select()
             .count('*', {as:'cuantos'})
             .whereRaw(mywhere,valores)
             .transacting(trx);
+            i='d';
+            console.log(cuantos)
+            console.log(cuantos[0]['d'+0]);
 
             if(cuantos[0].cuantos == 1){
                 var updates = [];
                 for(i = 0; i < data.places.length; i++){
                     updates[i] = await knex('flights_places')
                     .update({
-                        ocupado: 1,
-                        user_id: data.user_id
+                        ocupado: 1
                     })
                     .where({
                         dateflight_id: data.dateflight_id,
                         place_id: data.places[i]
+                    })
+                    .transacting(trx);
+
+                    await knex('flights_places_users')
+                    .insert({
+                        user_id:data.user_id,
+                        flights_places_id: cuantos[0]['d'+i],
                     })
                     .transacting(trx);
                 }
@@ -264,6 +276,8 @@ function buyPlaces( req, res ) {
             }else{
                 res.status(200).json({status:'sorry', message:'One or all the seats you would buy were bought by other person.'});
             }
+
+
         });
         
         
@@ -278,9 +292,10 @@ function buyPlaces( req, res ) {
         //     console.log( error.sqlMessage );
         //     res.status( 400 ).json( { title: 'Error', text:error.sqlMessage } )
         // } );
-    }else{
-        res.status( 400 ).json( { text:`The following fields are required: ${ requiredFields }` } );
-    }
+    // }else{
+    //     res.status( 400 ).json( { text:`The following fields are required: ${ requiredFields }` } );
+    // }
+}
 }
 
 function getUsersFlights( req, res ) {
@@ -295,8 +310,9 @@ function getUsersFlights( req, res ) {
     knex( 'flights_places' )
     .join('dateflights','flights_places.dateflight_id', 'dateflights.id')
     .join('flights', 'dateflights.flight_id', 'flights.id')
+    .join('flights_places_users', 'flights_places.id', 'flights_places_users.flights_places_id')
     .select('flights.id', 'to','dateflights.dateofflight', knex.raw('GROUP_CONCAT(DISTINCT(dateofflight)) as horarios'))
-    .whereRaw('flights_places.user_id=?',[data.user_id])
+    .whereRaw('flights_places_users.user_id=?',[data.user_id])
     .groupBy('flights.id')
     .then( response => {
         res.status( 200 ).json( { status: 'success', vuelos: response } );
